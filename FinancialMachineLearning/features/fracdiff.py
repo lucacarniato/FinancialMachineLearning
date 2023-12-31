@@ -1,7 +1,10 @@
 import numpy as np
 import pandas as pd
+from statsmodels.tsa.stattools import adfuller
+import matplotlib.pyplot as plt
 
-class FractionalDifferentiatedFeatures :
+
+class FractionalDifferentiatedFeatures:
     @staticmethod
     def getWeights(d, size):
         w = [1.]
@@ -25,23 +28,22 @@ class FractionalDifferentiatedFeatures :
     @staticmethod
     def fracDiff_FFD(series, d, thres=1e-5):
         w = FractionalDifferentiatedFeatures.getWeights_FFD(d, thres)
-        # w = getWeights(d, series.shape[0])
-        # w=getWeights_FFD(d,thres)
         width = len(w) - 1
         df = {}
-        for name in series.columns:
-            seriesF = series[[name]].fillna(method='ffill').dropna()
+        for column_name in series.columns:
+            seriesF = series[[column_name]].ffill().dropna()
             df_ = pd.Series()
             for iloc1 in range(width, seriesF.shape[0]):
                 loc0 = seriesF.index[iloc1 - width]
                 loc1 = seriesF.index[iloc1]
-                if not np.isfinite(series.loc[loc1, name]):
+                if not np.isfinite(series.loc[loc1, column_name]):
                     continue
                 df_.loc[loc1] = np.dot(w.T, seriesF.loc[loc0: loc1])[0, 0]
 
-            df[name] = df_.copy(deep=True)
+            df[column_name] = df_.copy(deep=True)
         df = pd.concat(df, axis=1)
         return df
+
     @staticmethod
     def fracDiff(series, d, thres=.01):
         w = FractionalDifferentiatedFeatures.getWeights(d, series.shape[0])
@@ -67,3 +69,33 @@ class FractionalDifferentiatedFeatures :
             df[name] = df_.copy(deep=True)
         df = pd.concat(df, axis=1)
         return df
+
+    @staticmethod
+    def plot_d(series, num_d = 10):
+        possible_d = np.divide(range(1, num_d), num_d)
+        tau = 1e-4
+        original_adf_stat_holder_all = []
+
+        for i in range(len(possible_d)):
+            ts_diff = FractionalDifferentiatedFeatures.fracDiff_FFD(series, possible_d[i], tau)
+            original_adf_stat_holder = []
+
+            for name in ts_diff.columns:
+                adf_p_value = adfuller(ts_diff[name].values)[1]
+                original_adf_stat_holder.append(adf_p_value)
+
+            original_adf_stat_holder_all.append(original_adf_stat_holder)
+
+        # Plotting
+        fig, ax = plt.subplots(figsize=(15, 6))
+
+        for i, name in enumerate(series.columns):
+            ax.plot(possible_d, [stat[i] for stat in original_adf_stat_holder_all], label=name)
+
+        ax.axhline(y=0.01, color='r')
+        ax.set_title('ADF P-value by differencing order in the original series')
+        ax.set_xlabel('Differencing Order')
+        ax.set_xticks(possible_d)
+        ax.set_ylabel('ADF P-value')
+        ax.legend()
+        plt.show()

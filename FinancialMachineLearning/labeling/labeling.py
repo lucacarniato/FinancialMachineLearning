@@ -14,7 +14,7 @@ def apply_pt_sl_on_t1(close, events, pt_sl, molecule):
         stop_loss = -stop_loss_multiple * events_['trgt']
     else:
         stop_loss = pd.Series(index=events.index)
-    for loc, vertical_barrier in events_['t1'].fillna(close.index[-1]).iteritems():
+    for loc, vertical_barrier in events_['t1'].fillna(close.index[-1]).items():
         closing_prices = close[loc: vertical_barrier]
         cum_returns = (closing_prices / close[loc] - 1) * events_.at[loc, 'side']
         out.loc[loc, 'sl'] = cum_returns[cum_returns < stop_loss[loc]].index.min()
@@ -74,6 +74,13 @@ def barrier_touched(out_df, events):
     out_df['bin'] = store
     return out_df
 def meta_labeling(triple_barrier_events, close):
+    """
+    
+    If the side is present in the events, all negative bin -1 are set to 0, 
+    only positive returns remains.
+    
+    """
+
     events_ = triple_barrier_events.dropna(subset = ['t1'])
     all_dates = events_.index.union(other = events_['t1'].values).drop_duplicates()
     prices = close.reindex(all_dates, method = 'bfill')
