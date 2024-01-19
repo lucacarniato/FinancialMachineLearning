@@ -16,15 +16,22 @@ class StandardBars(BaseBars):
     def _reset_cache(self):
         self.open_price = None
         self.high_price, self.low_price = -np.inf, np.inf
-        self.cum_statistics = {'cum_ticks': 0, 'cum_dollar_value': 0, 'cum_volume': 0, 'cum_buy_volume': 0}
+        self.cum_statistics = {'cum_ticks': 0,
+                               'cum_dollar_value': 0,
+                               'cum_volume': 0,
+                               'cum_buy_volume': 0,
+                               'cum_buyer_market_maker': 0,
+                               'cum_buyer_market_maker_volume': 0}
+
 
     def _extract_bars(self, data: Union[list, tuple, np.ndarray]) -> list:
         list_bars = []
         timestamps = data.index.values
         prices = data.price.values
         volumes = data.quantity.values
+        buyerMarketMakers = data.buyerMarketMaker.values
 
-        for timestamp, price, volume in zip(timestamps,prices,volumes):
+        for timestamp, price, volume, buyerMarketMaker in zip(timestamps,prices,volumes, buyerMarketMakers):
             # Set variables
             date_time = timestamp
             self.tick_num += 1
@@ -41,8 +48,13 @@ class StandardBars(BaseBars):
             self.cum_statistics['cum_ticks'] += 1
             self.cum_statistics['cum_dollar_value'] += dollar_value
             self.cum_statistics['cum_volume'] += volume
+
             if signed_tick == 1:
                 self.cum_statistics['cum_buy_volume'] += volume
+
+            if buyerMarketMaker == 1:
+                self.cum_statistics['cum_buyer_market_maker'] += 1
+                self.cum_statistics['cum_buyer_market_maker_volume'] += volume
 
             if self.cum_statistics[self.metric] >= self.threshold:
                 self._create_bars(date_time,

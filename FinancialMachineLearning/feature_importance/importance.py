@@ -70,6 +70,10 @@ def plot_feature_importance(importance_df, oob_score, oos_score, save_fig=False,
     plt.figure(figsize=(10, importance_df.shape[0] / 5))
     importance_df.sort_values('mean', ascending=True, inplace=True)
     importance_df['mean'].plot(kind='barh', color='b', alpha=0.25, xerr=importance_df['std'], error_kw={'ecolor': 'r'})
+
+    # Plot a vertical bar for the average value
+    plt.axvline(x=importance_df['mean'].mean(), color='r', linestyle='--', linewidth=2, label='Average Importance')
+
     plt.title('Feature importance. OOB Score:{}; OOS score:{}'.format(round(oob_score, 4), round(oos_score, 4)))
 
     if save_fig is True:

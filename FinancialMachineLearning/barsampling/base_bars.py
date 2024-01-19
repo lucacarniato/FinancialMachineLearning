@@ -41,7 +41,14 @@ class BaseBars(ABC):
         self.prev_tick_rule = 0
         self.open_price, self.prev_price, self.close_price = None, None, None
         self.high_price, self.low_price = -np.inf, np.inf
-        self.cum_statistics = {'cum_ticks': 0, 'cum_dollar_value': 0, 'cum_volume': 0, 'cum_buy_volume': 0}
+
+        self.cum_statistics = {'cum_ticks': 0,
+                               'cum_dollar_value': 0,
+                               'cum_volume': 0,
+                               'cum_buy_volume': 0,
+                               'cum_buyer_market_maker': 0,
+                               'cum_buyer_market_maker_volume': 0}
+
         self.tick_num = 0
         self.flag = False
     def batch_run(self,
@@ -67,7 +74,9 @@ class BaseBars(ABC):
                 'volume',
                 'cum_buy_volume',
                 'cum_ticks',
-                'cum_dollar_value']
+                'cum_dollar_value',
+                'cum_buyer_market_maker',
+                'cum_buyer_market_maker_volume']
         for batch in self._batch_iterator(file_path_or_df):
             if verbose:
                 print('Batch number:', count)
@@ -172,11 +181,22 @@ class BaseBars(ABC):
         cum_buy_volume = self.cum_statistics['cum_buy_volume']
         cum_ticks = self.cum_statistics['cum_ticks']
         cum_dollar_value = self.cum_statistics['cum_dollar_value']
+        cum_buyer_market_maker = self.cum_statistics['cum_buyer_market_maker']
+        cum_buyer_market_maker_volume = self.cum_statistics['cum_buyer_market_maker_volume']
 
         list_bars.append(
-            [date_time, self.tick_num, open_price, high_price, low_price, close_price, volume, cum_buy_volume,
+            [date_time,
+             self.tick_num,
+             open_price,
+             high_price,
+             low_price,
+             close_price,
+             volume,
+             cum_buy_volume,
              cum_ticks,
-             cum_dollar_value])
+             cum_dollar_value,
+             cum_buyer_market_maker,
+             cum_buyer_market_maker_volume])
 
     def _apply_tick_rule(self, price: float) -> int:
         if self.prev_price is not None:

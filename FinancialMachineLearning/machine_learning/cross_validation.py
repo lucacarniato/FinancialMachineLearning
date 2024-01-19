@@ -14,7 +14,7 @@ from scipy.stats import rv_continuous, kstest
 
 def ml_get_train_times(samples_info_sets: pd.Series, test_times: pd.Series) -> pd.Series:
     train = samples_info_sets.copy(deep=True)
-    for start_ix, end_ix in test_times.iteritems():
+    for start_ix, end_ix in test_times.items():
         df0 = train[(start_ix <= train.index) & (train.index <= end_ix)].index
         df1 = train[(start_ix <= train) & (train <= end_ix)].index
         df2 = train[(train.index <= start_ix) & (end_ix <= train)].index
