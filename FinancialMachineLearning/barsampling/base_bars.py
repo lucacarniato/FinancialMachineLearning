@@ -42,12 +42,12 @@ class BaseBars(ABC):
         self.open_price, self.prev_price, self.close_price = None, None, None
         self.high_price, self.low_price = -np.inf, np.inf
 
-        self.cum_statistics = {'cum_ticks': 0,
-                               'cum_dollar_value': 0,
-                               'cum_volume': 0,
-                               'cum_buy_volume': 0,
-                               'cum_buyer_market_maker': 0,
-                               'cum_buyer_market_maker_volume': 0}
+        self.cum_statistics = {'bar_cum_ticks': 0,
+                               'bar_cum_dollar_value': 0,
+                               'bar_cum_volume': 0,
+                               'bar_cum_buy_volume': 0,
+                               'bar_cum_buyer_market_maker': 0,
+                               'bar_cum_buyer_market_maker_volume': 0}
 
         self.tick_num = 0
         self.flag = False
@@ -65,18 +65,18 @@ class BaseBars(ABC):
 
         count = 0
         final_bars = []
-        cols = ['date_time',
-                'tick_num',
-                'open',
-                'high',
-                'low',
-                'close',
-                'volume',
-                'cum_buy_volume',
-                'cum_ticks',
-                'cum_dollar_value',
-                'cum_buyer_market_maker',
-                'cum_buyer_market_maker_volume']
+        cols = ['bar_date_time',
+                'bar_tick_num',
+                'bar_open',
+                'bar_high',
+                'bar_low',
+                'bar_close',
+                'bar_volume',
+                'bar_cum_buy_volume',
+                'bar_cum_ticks',
+                'bar_cum_dollar_value',
+                'bar_cum_buyer_market_maker',
+                'bar_cum_buyer_market_maker_volume']
         for batch in self._batch_iterator(file_path_or_df):
             if verbose:
                 print('Batch number:', count)
@@ -177,12 +177,12 @@ class BaseBars(ABC):
         high_price = max(high_price, open_price)
         low_price = min(low_price, open_price)
         close_price = price
-        volume = self.cum_statistics['cum_volume']
-        cum_buy_volume = self.cum_statistics['cum_buy_volume']
-        cum_ticks = self.cum_statistics['cum_ticks']
-        cum_dollar_value = self.cum_statistics['cum_dollar_value']
-        cum_buyer_market_maker = self.cum_statistics['cum_buyer_market_maker']
-        cum_buyer_market_maker_volume = self.cum_statistics['cum_buyer_market_maker_volume']
+        volume = self.cum_statistics['bar_cum_volume']
+        cum_buy_volume = self.cum_statistics['bar_cum_buy_volume']
+        cum_ticks = self.cum_statistics['bar_cum_ticks']
+        cum_dollar_value = self.cum_statistics['bar_cum_dollar_value']
+        cum_buyer_market_maker = self.cum_statistics['bar_cum_buyer_market_maker']
+        cum_buyer_market_maker_volume = self.cum_statistics['bar_cum_buyer_market_maker_volume']
 
         list_bars.append(
             [date_time,

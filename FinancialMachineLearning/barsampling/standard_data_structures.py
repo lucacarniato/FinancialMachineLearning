@@ -16,12 +16,12 @@ class StandardBars(BaseBars):
     def _reset_cache(self):
         self.open_price = None
         self.high_price, self.low_price = -np.inf, np.inf
-        self.cum_statistics = {'cum_ticks': 0,
-                               'cum_dollar_value': 0,
-                               'cum_volume': 0,
-                               'cum_buy_volume': 0,
-                               'cum_buyer_market_maker': 0,
-                               'cum_buyer_market_maker_volume': 0}
+        self.cum_statistics = {'bar_cum_ticks': 0,
+                               'bar_cum_dollar_value': 0,
+                               'bar_cum_volume': 0,
+                               'bar_cum_buy_volume': 0,
+                               'bar_cum_buyer_market_maker': 0,
+                               'bar_cum_buyer_market_maker_volume': 0}
 
 
     def _extract_bars(self, data: Union[list, tuple, np.ndarray]) -> list:
@@ -37,7 +37,7 @@ class StandardBars(BaseBars):
             self.tick_num += 1
             price = np.float64(price)
             volume = np.float64(volume)
-            dollar_value = price * volume
+            dollar_volume = price * volume
             signed_tick = self._apply_tick_rule(price)
 
             if self.open_price is None:
@@ -45,16 +45,16 @@ class StandardBars(BaseBars):
 
             self.high_price, self.low_price = self._update_high_low(price)
 
-            self.cum_statistics['cum_ticks'] += 1
-            self.cum_statistics['cum_dollar_value'] += dollar_value
-            self.cum_statistics['cum_volume'] += volume
+            self.cum_statistics['bar_cum_ticks'] += 1
+            self.cum_statistics['bar_cum_dollar_value'] += dollar_volume
+            self.cum_statistics['bar_cum_volume'] += volume
 
             if signed_tick == 1:
-                self.cum_statistics['cum_buy_volume'] += volume
+                self.cum_statistics['bar_cum_buy_volume'] += volume
 
             if buyerMarketMaker == 1:
-                self.cum_statistics['cum_buyer_market_maker'] += 1
-                self.cum_statistics['cum_buyer_market_maker_volume'] += volume
+                self.cum_statistics['bar_cum_buyer_market_maker'] += 1
+                self.cum_statistics['bar_cum_buyer_market_maker_volume'] += volume
 
             if self.cum_statistics[self.metric] >= self.threshold:
                 self._create_bars(date_time,
@@ -74,7 +74,7 @@ def dollar_bar(file_path_or_df: Union[str, Iterable[str], pd.DataFrame],
                to_csv: bool = False,
                output_path: Optional[str] = None):
 
-    bars = StandardBars(metric='cum_dollar_value',
+    bars = StandardBars(metric='bar_cum_dollar_value',
                         threshold=threshold,
                         batch_size=batch_size,
                         symbol=symbol,
@@ -85,7 +85,7 @@ def dollar_bar(file_path_or_df: Union[str, Iterable[str], pd.DataFrame],
                                  to_csv=to_csv,
                                  output_path=output_path)
 
-    dollar_bars.set_index('date_time', inplace=True)
+    dollar_bars.set_index('bar_date_time', inplace=True)
     # second removal of duplicates
     dollar_bars = dollar_bars[~dollar_bars.index.duplicated(keep='first')]
 
