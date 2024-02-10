@@ -52,15 +52,17 @@ def z_score_filter(raw_time_series, mean_window, std_window, z_score=3, time_sta
 
     t_pos_events = raw_time_series[condition_upper].index
     t_neg_events = raw_time_series[condition_lower].index
-
-    t_events = raw_time_series[condition_upper | condition_lower].index
-
+    
+    z_score_filter = pd.DataFrame(0, index=raw_time_series.index, columns=['value'])
+    z_score_filter.loc[t_pos_events] = 1
+    z_score_filter.loc[t_neg_events] = -1
+    
     if plot:
         plot_filter(raw_time_series, t_pos_events, t_neg_events)
 
     if time_stamps:
         t_pos_events = pd.DatetimeIndex(t_pos_events)
         t_neg_events = pd.DatetimeIndex(t_neg_events)
-        return t_pos_events, t_neg_events, t_events
+        return  t_pos_events, t_neg_events, z_score_filter
 
-    return t_pos_events, t_neg_events, t_events
+    return t_pos_events, t_neg_events, z_score_filter

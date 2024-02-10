@@ -23,7 +23,8 @@ def de_prado_bet_size(prob_series, clip = True):
 
     return dp_bet_sizes
 
-def get_signal(prob, num_classes, pred = None):
+def get_signal(events, num_classes, pred = None):
+    prob = events['prob']
     if prob.shape[0] == 0:
         return pd.Series()
     bet_sizes = (prob - 1.0 / num_classes) / (prob * (1.0 - prob)) ** 0.5

@@ -109,9 +109,8 @@ def fracDiff(series, d, thres=.01):
     df = pd.concat(df, axis=1)
     return df
 
-def plot_d(series, num_d = 10):
+def plot_d(series, num_d = 10,tau = 1e-4):
     possible_d = np.divide(range(1, num_d), num_d)
-    tau = 1e-4
     original_adf_stat_holder_all = []
 
     for i in range(len(possible_d)):
