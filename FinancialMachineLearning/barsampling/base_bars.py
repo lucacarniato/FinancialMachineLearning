@@ -121,12 +121,16 @@ class BaseBars(ABC):
                 raise ValueError('file_path_or_df is neither string(path to a csv file), iterable of strings, nor pd.DataFrame')
 
         elif self.file_format == '.sql':
-            sql_file_names = os.listdir(file_path_or_df)
-            sql_file_names = sorted(sql_file_names, key=lambda x: int(x.split('_')[0]))
-            for filename in sql_file_names:
-                file_path = os.path.join(file_path_or_df, filename)
-                if os.path.isfile(file_path):
-                    yield get_trades('sqlite:///' + file_path, self.symbol)
+            sql_file_paths = []
+            for directory in file_path_or_df:
+                file_names = os.listdir(directory)
+                file_names = [os.path.join(directory, file_name) for file_name in file_names]
+                sql_file_paths += file_names
+
+            sql_file_paths = sorted(sql_file_paths, key=lambda x: int(x.split('_')[0].split('/')[-1]))
+            for sql_file_path in sql_file_paths:
+                if os.path.isfile(sql_file_path):
+                    yield get_trades('sqlite:///' + sql_file_path, self.symbol)
 
     def _read_first_csv_row(self, file_path: str):
         first_row = pd.read_csv(file_path, nrows=1)
