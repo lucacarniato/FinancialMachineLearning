@@ -2,7 +2,30 @@ from abc import ABC, abstractmethod
 from typing import Tuple, Union, Generator, Iterable, Optional
 import numpy as np
 import pandas as pd
+import os
 from FinancialMachineLearning.multiprocess.fast_ewma import ewma
+
+from sqlalchemy import create_engine, Table, MetaData
+
+def get_trades(df_file_name, symbol):
+    engine = create_engine(df_file_name)
+
+    metadata = MetaData()
+    trades_table = Table(f'{symbol}_trade', metadata, autoload_with=engine)
+
+    with engine.connect() as connection:
+        query = connection.execute(trades_table.select().order_by(trades_table.c.time))
+        result = query.fetchall()
+        columns = trades_table.columns.keys()
+        raw_data = pd.DataFrame(result, columns=columns)
+        raw_data['time'] = pd.to_datetime(raw_data['time'] / 1000.0, unit='s')
+
+    raw_data.set_index('time', inplace=True)
+    raw_data.sort_index(inplace=True)
+    # first removal of duplicates
+    raw_data = raw_data[~raw_data.index.duplicated(keep='first')]
+
+    return raw_data
 
 def _crop_data_frame_in_batches(df: pd.DataFrame, chunksize: int) -> list:
     generator_object = []
@@ -10,13 +33,22 @@ def _crop_data_frame_in_batches(df: pd.DataFrame, chunksize: int) -> list:
         generator_object.append(chunk)
     return generator_object
 class BaseBars(ABC):
-    def __init__(self, metric: str, batch_size: int = 2e7):
+    def __init__(self, metric: str, batch_size: int = 2e7, symbol: str = None, file_format='.csv'):
         self.metric = metric
         self.batch_size = batch_size
+        self.symbol = symbol
+        self.file_format = file_format
         self.prev_tick_rule = 0
         self.open_price, self.prev_price, self.close_price = None, None, None
         self.high_price, self.low_price = -np.inf, np.inf
-        self.cum_statistics = {'cum_ticks': 0, 'cum_dollar_value': 0, 'cum_volume': 0, 'cum_buy_volume': 0}
+
+        self.cum_statistics = {'bar_cum_ticks': 0,
+                               'bar_cum_dollar_value': 0,
+                               'bar_cum_volume': 0,
+                               'bar_cum_buy_volume': 0,
+                               'bar_cum_buyer_market_maker': 0,
+                               'bar_cum_buyer_market_maker_volume': 0}
+
         self.tick_num = 0
         self.flag = False
     def batch_run(self,
@@ -33,8 +65,18 @@ class BaseBars(ABC):
 
         count = 0
         final_bars = []
-        cols = ['date_time', 'tick_num', 'open', 'high', 'low', 'close', 'volume', 'cum_buy_volume', 'cum_ticks',
-                'cum_dollar_value']
+        cols = ['bar_date_time',
+                'bar_tick_num',
+                'bar_open',
+                'bar_high',
+                'bar_low',
+                'bar_close',
+                'bar_volume',
+                'bar_cum_buy_volume',
+                'bar_cum_ticks',
+                'bar_cum_dollar_value',
+                'bar_cum_buyer_market_maker',
+                'bar_cum_buyer_market_maker_volume']
         for batch in self._batch_iterator(file_path_or_df):
             if verbose:
                 print('Batch number:', count)
@@ -56,41 +98,46 @@ class BaseBars(ABC):
             return bars_df
         return None
 
-    def _batch_iterator(self, file_path_or_df: Union[str, Iterable[str], pd.DataFrame]) -> Generator[pd.DataFrame, None, None]:
-        if isinstance(file_path_or_df, (list, tuple)):
-            for file_path in file_path_or_df:
-                self._read_first_row(file_path)
-            for file_path in file_path_or_df:
-                for batch in pd.read_csv(file_path, chunksize=self.batch_size, parse_dates=[0]):
+    def _batch_iterator(self,
+                        file_path_or_df: Union[str, Iterable[str], pd.DataFrame]) -> Generator[pd.DataFrame, None, None]:
+
+        if self.file_format == '.csv':
+            if isinstance(file_path_or_df, (list, tuple)):
+                for file_path in file_path_or_df:
+                    self._read_first_csv_row(file_path)
+                for file_path in file_path_or_df:
+                    for batch in pd.read_csv(file_path, chunksize=self.batch_size, parse_dates=[0]):
+                        yield batch
+
+            elif isinstance(file_path_or_df, str):
+                self._read_first_csv_row(file_path_or_df)
+                for batch in pd.read_csv(file_path_or_df, chunksize=self.batch_size, parse_dates=[0]):
                     yield batch
 
-        elif isinstance(file_path_or_df, str):
-            self._read_first_row(file_path_or_df)
-            for batch in pd.read_csv(file_path_or_df, chunksize=self.batch_size, parse_dates=[0]):
-                yield batch
+            elif isinstance(file_path_or_df, pd.DataFrame):
+                for batch in _crop_data_frame_in_batches(file_path_or_df, self.batch_size):
+                    yield batch
+            else:
+                raise ValueError('file_path_or_df is neither string(path to a csv file), iterable of strings, nor pd.DataFrame')
 
-        elif isinstance(file_path_or_df, pd.DataFrame):
-            for batch in _crop_data_frame_in_batches(file_path_or_df, self.batch_size):
-                yield batch
+        elif self.file_format == '.sql':
+            sql_file_paths = []
+            for directory in file_path_or_df:
+                file_names = os.listdir(directory)
+                file_names = [os.path.join(directory, file_name) for file_name in file_names]
+                sql_file_paths += file_names
 
-        else:
-            raise ValueError('file_path_or_df is neither string(path to a csv file), iterable of strings, nor pd.DataFrame')
+            sql_file_paths = sorted(sql_file_paths, key=lambda x: int(x.split('_')[0].split('/')[-1]))
+            for sql_file_path in sql_file_paths:
+                if os.path.isfile(sql_file_path):
+                    yield get_trades('sqlite:///' + sql_file_path, self.symbol)
 
-    def _read_first_row(self, file_path: str):
+    def _read_first_csv_row(self, file_path: str):
         first_row = pd.read_csv(file_path, nrows=1)
         self._assert_csv(first_row)
 
-    def run(self, data: Union[list, tuple, pd.DataFrame]) -> list:
-        if isinstance(data, (list, tuple)):
-            values = data
-
-        elif isinstance(data, pd.DataFrame):
-            values = data.values
-
-        else:
-            raise ValueError('data is neither list nor tuple nor pd.DataFrame')
-
-        list_bars = self._extract_bars(data=values)
+    def run(self, data:pd.DataFrame) -> list:
+        list_bars = self._extract_bars(data=data)
 
         # Set flag to True: notify function to use cache
         self.flag = True
@@ -134,15 +181,26 @@ class BaseBars(ABC):
         high_price = max(high_price, open_price)
         low_price = min(low_price, open_price)
         close_price = price
-        volume = self.cum_statistics['cum_volume']
-        cum_buy_volume = self.cum_statistics['cum_buy_volume']
-        cum_ticks = self.cum_statistics['cum_ticks']
-        cum_dollar_value = self.cum_statistics['cum_dollar_value']
+        volume = self.cum_statistics['bar_cum_volume']
+        cum_buy_volume = self.cum_statistics['bar_cum_buy_volume']
+        cum_ticks = self.cum_statistics['bar_cum_ticks']
+        cum_dollar_value = self.cum_statistics['bar_cum_dollar_value']
+        cum_buyer_market_maker = self.cum_statistics['bar_cum_buyer_market_maker']
+        cum_buyer_market_maker_volume = self.cum_statistics['bar_cum_buyer_market_maker_volume']
 
         list_bars.append(
-            [date_time, self.tick_num, open_price, high_price, low_price, close_price, volume, cum_buy_volume,
+            [date_time,
+             self.tick_num,
+             open_price,
+             high_price,
+             low_price,
+             close_price,
+             volume,
+             cum_buy_volume,
              cum_ticks,
-             cum_dollar_value])
+             cum_dollar_value,
+             cum_buyer_market_maker,
+             cum_buyer_market_maker_volume])
 
     def _apply_tick_rule(self, price: float) -> int:
         if self.prev_price is not None:

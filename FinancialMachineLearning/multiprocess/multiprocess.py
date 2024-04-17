@@ -36,17 +36,10 @@ def mp_pandas_obj(func, pd_obj, num_threads=24, mp_batches=1, lin_mols=True, **k
     else:
         out = process_jobs(jobs, num_threads=num_threads)
 
-    if isinstance(out[0], pd.DataFrame):
-        df0 = pd.DataFrame()
-    elif isinstance(out[0], pd.Series):
-        df0 = pd.Series(dtype = float)
-    else:
-        return out
-
     df0 = pd.concat(out)
-
     df0 = df0.sort_index()
     return df0
+
 def process_jobs_(jobs):
     out = []
     for job in jobs:
@@ -71,6 +64,7 @@ def report_progress(job_num, num_jobs, time0, task):
         sys.stderr.write(msg + '\r')
     else:
         sys.stderr.write(msg + '\n')
+
 def process_jobs(jobs, task=None, num_threads=24):
     if task is None:
         task = jobs[0]['func'].__name__

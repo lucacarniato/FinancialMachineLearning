@@ -1,7 +1,9 @@
 import numpy as np
 import pandas as pd
 from FinancialMachineLearning.multiprocess.multiprocess import mp_pandas_obj
-def apply_pt_sl_on_t1(close, events, pt_sl, molecule):
+
+
+def apply_pt_sl_on_t1(bars, events, pt_sl, molecule):
     events_ = events.loc[molecule]
     out = events_[['t1']].copy(deep=True)
     profit_taking_multiple = pt_sl[0]
@@ -14,13 +16,56 @@ def apply_pt_sl_on_t1(close, events, pt_sl, molecule):
         stop_loss = -stop_loss_multiple * events_['trgt']
     else:
         stop_loss = pd.Series(index=events.index)
+    close = bars['bar_close']
+    low = bars['bar_low']
+    high = bars['bar_high']
     for loc, vertical_barrier in events_['t1'].fillna(close.index[-1]).items():
-        closing_prices = close[loc: vertical_barrier]
-        cum_returns = (closing_prices / close[loc] - 1) * events_.at[loc, 'side']
-        out.loc[loc, 'sl'] = cum_returns[cum_returns < stop_loss[loc]].index.min()
-        out.loc[loc, 'pt'] = cum_returns[cum_returns > profit_taking[loc]].index.min()
+        side = events_.at[loc, 'side']
+        if side == 1:
+            min_prices_return = low[loc: vertical_barrier]
+            max_prices_return = high[loc: vertical_barrier]
+        else:
+            min_prices_return = high[loc: vertical_barrier]
+            max_prices_return = low[loc: vertical_barrier]
+
+        cum_returns_min = (min_prices_return / close[loc] - 1) * side
+        cum_returns_max = (max_prices_return / close[loc] - 1) * side
+
+        sl_date = cum_returns_min[cum_returns_min < stop_loss[loc]].index.min()
+        pt_date = cum_returns_max[cum_returns_max > profit_taking[loc]].index.min()
+
+        vert_barrier_time = events_['t1'].loc[loc]
+
+        out.loc[loc, 'touched_date'] = vert_barrier_time
+        out.loc[loc, 'profit_perc_vol'] = 0.0
+        is_sl_date_nan = pd.isna(sl_date)
+        is_pt_date_nan = pd.isna(pt_date)
+
+        if is_sl_date_nan and is_pt_date_nan:
+            continue
+
+        if is_sl_date_nan and not is_pt_date_nan and pt_date <= vert_barrier_time:
+            out.loc[loc, 'touched_date'] = pt_date
+            out.loc[loc, 'profit_perc_vol'] = profit_taking[loc]
+            continue
+
+        if is_pt_date_nan and not is_sl_date_nan and sl_date <= vert_barrier_time:
+            out.loc[loc, 'touched_date'] = sl_date
+            out.loc[loc, 'profit_perc_vol'] = stop_loss[loc]
+            continue
+
+        if not is_sl_date_nan and not is_pt_date_nan:
+            if sl_date < pt_date and sl_date <= vert_barrier_time:
+                out.loc[loc, 'touched_date'] = sl_date
+                out.loc[loc, 'profit_perc_vol'] = stop_loss[loc]
+            elif pt_date < sl_date and pt_date <= vert_barrier_time:
+                out.loc[loc, 'touched_date'] = pt_date
+                out.loc[loc, 'profit_perc_vol'] = profit_taking[loc]
+
     return out
-def add_vertical_barrier(t_events, close, num_days = 0, num_hours = 0, num_minutes = 0, num_seconds = 0):
+
+
+def add_vertical_barrier(t_events, close, num_days=0, num_hours=0, num_minutes=0, num_seconds=0):
     timedelta = pd.Timedelta(
         '{} days, {} hours, {} minutes, {} seconds'.format(num_days, num_hours, num_minutes, num_seconds))
     nearest_index = close.index.searchsorted(t_events + timedelta)
@@ -29,7 +74,9 @@ def add_vertical_barrier(t_events, close, num_days = 0, num_hours = 0, num_minut
     filtered_events = t_events[:nearest_index.shape[0]]
     vertical_barriers = pd.Series(data=nearest_timestamp, index=filtered_events)
     return vertical_barriers
-def get_events(close, t_events, pt_sl, target, min_ret, num_threads, vertical_barrier_times = False,
+
+
+def get_events(bars, t_events, pt_sl, target, min_ret, num_threads, vertical_barrier_times=False,
                side_prediction=None):
     target = target.loc[t_events]
     target = target[target > min_ret]
@@ -46,53 +93,47 @@ def get_events(close, t_events, pt_sl, target, min_ret, num_threads, vertical_ba
     first_touch_dates = mp_pandas_obj(func=apply_pt_sl_on_t1,
                                       pd_obj=('molecule', events.index),
                                       num_threads=num_threads,
-                                      close=close,
+                                      bars=bars,
                                       events=events,
                                       pt_sl=pt_sl_)
+
     for ind in events.index:
-        events.loc[ind, 't1'] = first_touch_dates.loc[ind, :].dropna().min()
+        events.loc[ind, 't1'] = first_touch_dates.loc[ind, 'touched_date']
+        events.loc[ind, 'profit_perc_vol'] = first_touch_dates.loc[ind, 'profit_perc_vol']
     if side_prediction is None:
         events = events.drop('side', axis=1)
     events['pt'] = pt_sl[0]
     events['sl'] = pt_sl[1]
     return events
-def barrier_touched(out_df, events):
-    store = []
-    for date_time, values in out_df.iterrows():
-        ret = values['ret']
-        target = values['trgt']
 
-        pt_level_reached = ret > target * events.loc[date_time, 'pt']
-        sl_level_reached = ret < -target * events.loc[date_time, 'sl']
 
-        if ret > 0.0 and pt_level_reached:
-            store.append(1)
-        elif ret < 0.0 and sl_level_reached:
-            store.append(-1)
-        else:
-            store.append(0)
-    out_df['bin'] = store
+def meta_labeling(triple_barrier_events):
+    """
+    
+    If the side is present in the events, all negative bin -1 are set to 0, 
+    only positive returns remains.
+    
+    """
+
+    out_df = pd.DataFrame(index=triple_barrier_events.index)
+    out_df['ret'] = triple_barrier_events['profit_perc_vol']
+    out_df['side'] = triple_barrier_events['side']
+
+    # o side are not touched barriers
+    out_df['ret'] = out_df.apply(lambda row: 0 if row['side'] == 0 else row['ret'], axis=1)
+
+    # sl, pt and not touched
+    out_df['bin'] = out_df['ret'].apply(lambda r: 1 if r > 0 else (-1 if r < 0 else 0))
+    
+    # set what is not touched or negative to 0
+    out_df.loc[out_df['ret'] <= 0, 'bin'] = 0
+
+    out_df['side'] = triple_barrier_events['side']
+
     return out_df
-def meta_labeling(triple_barrier_events, close):
-    events_ = triple_barrier_events.dropna(subset = ['t1'])
-    all_dates = events_.index.union(other = events_['t1'].values).drop_duplicates()
-    prices = close.reindex(all_dates, method = 'bfill')
 
-    out_df = pd.DataFrame(index = events_.index)
-    out_df['ret'] = np.log(prices.loc[events_['t1'].values].values / prices.loc[events_.index])
-    out_df['trgt'] = events_['trgt']
 
-    if 'side' in events_:
-        out_df['ret'] = out_df['ret'] * events_['side']
-    out_df = barrier_touched(out_df, triple_barrier_events)
-    if 'side' in events_:
-        out_df.loc[out_df['ret'] <= 0, 'bin'] = 0
-    out_df['ret'] = np.exp(out_df['ret']) - 1
-    tb_cols = triple_barrier_events.columns
-    if 'side' in tb_cols:
-        out_df['side'] = triple_barrier_events['side']
-    return out_df
-def drop_labels(events, min_pct = 0.05):
+def drop_labels(events, min_pct=0.05):
     while True:
         df0 = events['bin'].value_counts(normalize=True)
         if df0.min() > min_pct or df0.shape[0] < 3:

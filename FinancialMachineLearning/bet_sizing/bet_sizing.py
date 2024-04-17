@@ -5,7 +5,6 @@ from scipy.stats import norm, moment
 from FinancialMachineLearning.bet_sizing.ef3m import M2N, raw_moment, most_likely_parameters
 from FinancialMachineLearning.multiprocess.multiprocess import mp_pandas_obj
 import warnings
-
 def de_prado_bet_size(prob_series, clip = True):
     # Can't compute for p = 1 or p = 0, leads to inf.
     p = prob_series.copy()
@@ -14,7 +13,7 @@ def de_prado_bet_size(prob_series, clip = True):
 
     # Getting max value from training set
     num_classes = 2
-    dp_sizes = (p - 1 / num_classes) / ((p * (1 - p)) ** 0.5)
+    dp_sizes = (p - 1.0 / num_classes) / ((p * (1.0 - p)) ** 0.5)
 
     dp_t_sizes = dp_sizes.apply(lambda s: norm.cdf(s))
     dp_bet_sizes = dp_t_sizes
@@ -24,12 +23,13 @@ def de_prado_bet_size(prob_series, clip = True):
 
     return dp_bet_sizes
 
-def get_signal(prob, num_classes, pred = None):
+def get_signal(events, num_classes, pred = None):
+    prob = events['prob']
     if prob.shape[0] == 0:
         return pd.Series()
-    bet_sizes = (prob - 1/num_classes) / (prob * (1 - prob))**0.5
-    if not isinstance(pred, type(None)): bet_sizes = pred * (2 * norm.cdf(bet_sizes) - 1)
-    else: bet_sizes = bet_sizes.apply(lambda s: 2 * norm.cdf(s) - 1)
+    bet_sizes = (prob - 1.0 / num_classes) / (prob * (1.0 - prob)) ** 0.5
+    bet_sizes = bet_sizes.apply(lambda s: 2 * norm.cdf(s) - 1)
+    bet_sizes = events['pred'] * bet_sizes
     return bet_sizes
 
 def avg_active_signals(signals, num_threads=1):
@@ -138,8 +138,8 @@ def get_w(price_div, m_bet_size, func):
     return {'sigmoid': get_w_sigmoid,
             'power': get_w_power}[func](price_div, m_bet_size)
 
-def bet_size_probability(events, prob, num_classes, pred=None, step_size=0.0, average_active=False, num_threads=1):
-    signal_0 = get_signal(prob, num_classes, pred)
+def bet_size_probability(events, num_classes, step_size=0.0, average_active=False, num_threads=1):
+    signal_0 = get_signal(events, num_classes)
     events_0 = signal_0.to_frame('signal').join(events['t1'], how='left')
     if average_active:
         signal_1 = avg_active_signals(events_0, num_threads)

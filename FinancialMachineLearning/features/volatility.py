@@ -2,13 +2,27 @@ import numpy as np
 import pandas as pd
 import arch
 
-def daily_volatility(close: pd.Series, lookback: int = 100) -> pd.Series:
-    df0 = close.index.searchsorted(close.index - pd.Timedelta(days=1))
+def ewm_volatility(prices: pd.Series,
+                   lookback: int = 100,
+                   time_delta=pd.Timedelta(hours=1)) -> pd.Series:
+    """'
+    Computes the volatility of returns
+
+    Args:
+        prices: The price series
+        lookback: The span of the exponential moving average
+        time_delta: The time delta to use for computing returns
+
+    """
+    df0 = prices.index.searchsorted(prices.index - time_delta)
     df0 = df0[df0 > 0]
-    df0 = (pd.Series(close.index[df0 - 1],
-                     index=close.index[close.shape[0] - df0.shape[0]:]))
-    df0 = close.loc[df0.index] / close.loc[df0.values].values - 1  # daily rets
-    df0 = df0.ewm(span = lookback).std()
+    # series with index the next time and value the previous time
+    df0 = (pd.Series(prices.index[df0 - 1],
+                     index=prices.index[prices.shape[0] - df0.shape[0]:]))
+    # compute the standard deviation of the exponential moving average of the returns
+    df0 = prices.loc[df0.index] / prices.loc[df0.values].values - 1
+    df0 = df0.ewm(span=lookback).std()
+    df0.dropna(inplace=True)
     return df0
 
 def parkinson_volatility(high: pd.Series, low : pd.Series, window : int = 20) -> pd.Series :

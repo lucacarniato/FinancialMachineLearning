@@ -75,13 +75,11 @@ class ProbSharpeRatio:
     def step_size(self, w, d1Z):
         learning_rate = self.delta
 
-        # d1Z를 NumPy 배열로 변환하고 w와 동일한 형태로 만듭니다.
         d1Z_array = np.array(d1Z).reshape(w.shape)
 
-        # 가중치 업데이트
         w += learning_rate * d1Z_array
-        w = np.clip(w, 0, 1)  # 가중치를 경계 내에 유지합니다.
-        w /= np.sum(w)  # 가중치 정규화
+        w = np.clip(w, 0, 1)
+        w /= np.sum(w)화
 
         return w
 
@@ -195,7 +193,7 @@ class ProbSharpeRatio:
         :return:
         '''
         if stats[1] == 0:
-            meanSR = 0  # 분모가 0이면 meanSR을 0으로 설정하거나 다른 처리
+            meanSR = 0
         else:
             meanSR = stats[0] / stats[1]
 

@@ -52,8 +52,15 @@ def correlation_to_covariance(corr, std):
     cov = corr * np.outer(std, std)
     return cov
 
-
 class GenerateSamples:
+    @staticmethod
+    def getPCA(matrix):
+        eVal, eVec = np.linalg.eig(matrix)
+        indices = eVal.argsort()[::-1]
+        eVal, eVec = eVal[indices], eVec[:, indices]
+        eVal = np.diagflat(eVal)
+        return eVal, eVec
+
     @staticmethod
     def fitKDE(obs, bWidth=.15, kernel='gaussian', x=None):
         if len(obs.shape) == 1: obs = obs.reshape(-1, 1)

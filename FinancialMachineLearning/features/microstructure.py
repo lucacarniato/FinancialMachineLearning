@@ -115,8 +115,10 @@ def becker_parkinson_vol(high: pd.Series, low: pd.Series, window: int = 20) -> p
     return sigma
 
 class BarbasedLambda :
-    def __init__(self, close : pd.Series, volume : pd.Series,
-                 dollar_volume: pd.Series, window : int = 20):
+    def __init__(self, close : pd.Series,
+                 volume : pd.Series,
+                 dollar_volume: pd.Series,
+                 window : int = 20):
         self.close = close
         self.volume = volume
         self.window = window
